@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+mem0ai
+qdrant-client
