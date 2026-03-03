@@ -91,7 +91,7 @@ export default function TeamOrgChart() {
                   className="size-14 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0"
                   style={{ backgroundColor: agent.color }}
                 >
-                  {agent.name[0]}
+                  {agent?.name?.[0] ?? "?"}
                 </div>
                 <div
                   className={`absolute -bottom-0.5 -right-0.5 size-4 rounded-full border-2 border-zinc-800 ${

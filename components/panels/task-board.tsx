@@ -53,7 +53,7 @@ function TaskCard({
           className="size-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
           style={{ backgroundColor: agentColor(task.assignee) }}
         >
-          {task.assignee[0]}
+          {task?.assignee?.[0] ?? "?"}
         </div>
         <span className="text-xs text-zinc-500">{task.assignee}</span>
 

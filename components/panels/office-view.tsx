@@ -159,7 +159,7 @@ export default function OfficeView() {
                   transform: isHovered ? "scale(1.15)" : "scale(1)",
                 }}
               >
-                {agent.name[0]}
+                {agent?.name?.[0] ?? "?"}
                 <div
                   className={`absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-zinc-900 ${
                     isOnline ? "bg-emerald-400" : "bg-zinc-600"

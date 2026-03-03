@@ -244,7 +244,7 @@ export default function CalendarView() {
                   className="size-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
                   style={{ backgroundColor: agentColor(job.agent) }}
                 >
-                  {job.agent[0]}
+                  {job?.agent?.[0] ?? "?"}
                 </div>
               </div>
               <div className="flex items-center gap-3 mt-1.5 text-[10px] text-zinc-500">

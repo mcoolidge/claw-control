@@ -258,7 +258,7 @@ export default function MemoryJournal() {
                       className="size-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
                       style={{ backgroundColor: agentColor(m.agent) }}
                     >
-                      {m.agent[0]}
+                      {m?.agent?.[0] ?? "?"}
                     </div>
                     <span className="text-xs font-medium" style={{ color: agentColor(m.agent) }}>
                       {m.agent}

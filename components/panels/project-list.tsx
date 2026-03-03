@@ -146,7 +146,7 @@ export default function ProjectList() {
               <span className="font-medium text-zinc-100">{topProject.name}</span> is your highest-priority active project at {topProject.progress}% completion.
             </p>
             <div className="text-xs text-zinc-400">
-              Next action: <span className="text-zinc-200">{topProject.nextActions[0]}</span>
+              Next action: <span className="text-zinc-200">{topProject?.nextActions?.[0] ?? ""}</span>
             </div>
             <button
               onClick={() => { setSelected(topProject); setShowAdvisor(false); }}
@@ -189,7 +189,7 @@ export default function ProjectList() {
                       style={{ backgroundColor: agentColor(name) }}
                       title={name}
                     >
-                      {name[0]}
+                      {name?.[0] ?? "?"}
                     </div>
                   ))}
                 </div>

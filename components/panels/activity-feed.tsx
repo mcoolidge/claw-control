@@ -108,7 +108,7 @@ export default function ActivityFeed() {
               className="size-5 shrink-0 rounded-full flex items-center justify-center text-[9px] font-bold text-white mt-0.5"
               style={{ backgroundColor: agentColor(ev.agent) }}
             >
-              {ev.agent[0]}
+              {ev?.agent?.[0] ?? "?"}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
