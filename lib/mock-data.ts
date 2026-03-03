@@ -10,7 +10,7 @@ function uuid(): string {
 }
 
 export type TaskPriority = "low" | "medium" | "high" | "critical";
-export type TaskStatus = "backlog" | "in-progress" | "in-review" | "done";
+export type TaskStatus = "backlog" | "in-progress" | "in-review" | "testing" | "done";
 
 export interface Task {
   id: string;

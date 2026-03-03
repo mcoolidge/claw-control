@@ -108,7 +108,7 @@ export default function MemoryJournal() {
     try {
       const url = searchQuery
         ? `${API_BASE}/memory/search?q=${encodeURIComponent(searchQuery)}&user_id=mat`
-        : `${API_BASE}/memory/list?user_id=mat`;
+        : `${API_BASE}/list?user_id=mat`;
 
       const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
       if (!res.ok) throw new Error("API error");

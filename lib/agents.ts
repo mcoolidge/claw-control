@@ -2,17 +2,17 @@
 // Fallback list used for SSR / before API loads
 
 export const AGENT_COLORS: Record<string, string> = {
-  main:    "#f97316",
-  athena:  "#a78bfa",
-  ada:     "#34d399",
-  suzieqa: "#60a5fa",
+  greg:   "#3b82f6",
+  apollo: "#22c55e",
+  kai:    "#a855f7",
+  athena: "#f97316",
 };
 
 export const AGENTS = [
-  { name: "Henry",   id: "main",    model: "github-copilot/claude-sonnet-4.6", color: "#f97316" },
-  { name: "Athena",  id: "athena",  model: "github-copilot/claude-sonnet-4.6", color: "#a78bfa" },
-  { name: "Ada",     id: "ada",     model: "github-copilot/claude-sonnet-4.6", color: "#34d399" },
-  { name: "SuzieQA", id: "suzieqa", model: "github-copilot/claude-sonnet-4.6", color: "#60a5fa" },
+  { name: "Greg",   id: "greg",   port: 19000, model: "github-copilot/claude-sonnet-4.6", color: "#3b82f6" },
+  { name: "Apollo", id: "apollo", port: 19001, model: "github-copilot/claude-sonnet-4.6", color: "#22c55e" },
+  { name: "Kai",    id: "kai",    port: 19005, model: "github-copilot/claude-sonnet-4.6", color: "#a855f7" },
+  { name: "Athena", id: "athena", port: 24000, model: "github-copilot/claude-sonnet-4.6", color: "#f97316" },
 ];
 
 export type Agent = (typeof AGENTS)[number];

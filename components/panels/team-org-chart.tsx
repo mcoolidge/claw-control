@@ -77,6 +77,7 @@ export default function TeamOrgChart() {
 
       {AGENTS.map((agent) => {
         const meta = AGENT_META[agent.name];
+        if (!meta) return null;
         const AgentIcon = meta.icon;
 
         return (

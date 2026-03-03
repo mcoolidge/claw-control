@@ -1,124 +1,155 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { AGENTS } from "@/lib/agents";
+import { RefreshCw, CheckCircle, XCircle, Clock, Zap } from "lucide-react";
 
 interface ActivityEvent {
   id: string;
+  ts: number;
   agent: string;
-  timestamp: string;
-  type: "message" | "tool" | "error" | "system";
-  role: string;
-  summary: string;
+  type: "cron" | "session" | "tool" | "message";
+  label: string;
+  status: "ok" | "error" | "running";
+  detail?: string;
+  durationMs?: number;
 }
 
-const AGENT_COLORS: Record<string, string> = {
-  main:    "#f97316",
-  athena:  "#a78bfa",
-  ada:     "#34d399",
-  suzieqa: "#60a5fa",
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  cron:    <Clock className="size-3 shrink-0" />,
+  session: <Zap className="size-3 shrink-0" />,
+  tool:    <Zap className="size-3 shrink-0" />,
+  message: <Zap className="size-3 shrink-0" />,
 };
 
-const TYPE_BADGES: Record<string, string> = {
-  tool:    "bg-emerald-500/15 text-emerald-400",
-  message: "bg-blue-500/15 text-blue-400",
-  error:   "bg-red-500/15 text-red-400",
-  system:  "bg-zinc-500/15 text-zinc-400",
+const STATUS_COLORS: Record<string, string> = {
+  ok:      "text-emerald-400",
+  error:   "text-red-400",
+  running: "text-yellow-400",
 };
 
-function relativeTime(ts: string) {
-  const diff = Date.now() - new Date(ts).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return `${h}h ago`;
+function agentColor(id: string) {
+  return AGENTS.find((a) => a.id === id)?.color ?? "#71717a";
+}
+
+function agentName(id: string) {
+  return AGENTS.find((a) => a.id === id)?.name ?? id;
+}
+
+function relativeTime(ts: number) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return new Date(ts).toLocaleDateString();
 }
 
 export default function ActivityFeed() {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [filter, setFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filterType, setFilterType] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevCountRef = useRef(0);
 
-  const fetchEvents = useCallback(async () => {
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch("/api/activity?limit=50");
+      if (!res.ok) return;
       const data = await res.json();
       setEvents(data.events || []);
-    } catch {
-      // ignore
+      // Auto-scroll if new events arrived
+      if (data.events.length > prevCountRef.current && scrollRef.current) {
+        scrollRef.current.scrollTop = 0;
+      }
+      prevCountRef.current = data.events.length;
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, []);
+  }
 
   useEffect(() => {
-    fetchEvents();
-    const id = setInterval(() => {
-      fetchEvents();
-      setTick((t) => t + 1);
-    }, 5000);
-    return () => clearInterval(id);
-  }, [fetchEvents]);
+    load();
+    const interval = setInterval(() => load(true), 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // Tick forces relative time to update
-  void tick;
-
-  const filtered = filterType ? events.filter((e) => e.type === filterType) : events;
+  const filtered = filter ? events.filter((e) => e.type === filter) : events;
+  const types = Array.from(new Set(events.map((e) => e.type)));
 
   return (
     <div className="flex flex-col h-full gap-2">
-      {/* Filter bar */}
-      <div className="flex gap-1 flex-wrap">
-        {["tool", "message"].map((t) => (
+      {/* Controls */}
+      <div className="flex gap-1 flex-wrap items-center">
+        <button
+          onClick={() => setFilter(null)}
+          className={`text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
+            !filter ? "bg-zinc-600 text-zinc-200" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          all
+        </button>
+        {types.map((t) => (
           <button
             key={t}
-            onClick={() => setFilterType(filterType === t ? null : t)}
+            onClick={() => setFilter(filter === t ? null : t)}
             className={`text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
-              filterType === t ? TYPE_BADGES[t] : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"
+              filter === t ? "bg-zinc-600 text-zinc-200" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"
             }`}
           >
             {t}
           </button>
         ))}
         <button
-          onClick={fetchEvents}
+          onClick={() => load()}
           className="ml-auto text-zinc-500 hover:text-zinc-300 cursor-pointer"
           title="Refresh"
         >
-          <RefreshCw className="size-3" />
+          <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
         </button>
       </div>
 
-      {/* Events */}
-      <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
-        {loading && (
+      {/* Feed */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
+        {loading && events.length === 0 && (
           <p className="text-xs text-zinc-500 text-center pt-4">Loading…</p>
         )}
         {!loading && filtered.length === 0 && (
-          <p className="text-xs text-zinc-500 text-center pt-4">No activity yet</p>
+          <p className="text-xs text-zinc-600 text-center pt-4">No events</p>
         )}
         {filtered.map((ev) => (
           <div
             key={ev.id}
-            className="rounded-md bg-zinc-800/50 px-2.5 py-2 text-xs border border-zinc-700/30"
+            className="rounded-md bg-zinc-800/40 border border-zinc-700/30 px-2.5 py-2 space-y-1"
           >
-            <div className="flex items-center justify-between gap-1 mb-1">
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="size-2 rounded-full shrink-0"
-                  style={{ backgroundColor: AGENT_COLORS[ev.agent] ?? "#71717a" }}
-                />
-                <span className="font-medium text-zinc-300">{ev.agent}</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${TYPE_BADGES[ev.type] ?? TYPE_BADGES.system}`}>
-                  {ev.role === "toolResult" ? "result" : ev.type}
-                </span>
-              </div>
-              <span className="text-zinc-600 text-[10px] shrink-0">{relativeTime(ev.timestamp)}</span>
+            <div className="flex items-center gap-1.5">
+              {/* Agent dot */}
+              <div
+                className="size-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: agentColor(ev.agent) }}
+              />
+              <span className="text-[10px] font-medium" style={{ color: agentColor(ev.agent) }}>
+                {agentName(ev.agent)}
+              </span>
+              <span className={`ml-auto ${STATUS_COLORS[ev.status]}`}>
+                {ev.status === "ok" && <CheckCircle className="size-3" />}
+                {ev.status === "error" && <XCircle className="size-3" />}
+                {ev.status === "running" && <Clock className="size-3" />}
+              </span>
             </div>
-            <p className="text-zinc-400 leading-snug truncate">{ev.summary}</p>
+            <div className="flex items-start gap-1.5">
+              <span className="text-zinc-500 mt-0.5">{TYPE_ICONS[ev.type]}</span>
+              <span className="text-xs text-zinc-300 leading-tight flex-1">{ev.label}</span>
+            </div>
+            {ev.detail && (
+              <p className="text-[10px] text-zinc-600 truncate pl-4">{ev.detail}</p>
+            )}
+            <div className="flex items-center gap-2 pl-4">
+              <span className="text-[10px] text-zinc-600">{relativeTime(ev.ts)}</span>
+              {ev.durationMs != null && (
+                <span className="text-[10px] text-zinc-700">{ev.durationMs}ms</span>
+              )}
+            </div>
           </div>
         ))}
       </div>

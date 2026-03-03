@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { execSync } from "child_process";
+
+const AGENT_PORTS: Record<string, number> = {
+  greg:   19000,
+  apollo: 19001,
+  kai:    19005,
+  athena: 24000,
+};
 
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ ok: false });
+  if (!id || !AGENT_PORTS[id]) return NextResponse.json({ ok: false });
 
   try {
-    // Check if the agent has an active session via openclaw
-    const out = execSync(`openclaw agents list 2>/dev/null`, { encoding: "utf8", timeout: 4000 });
-    const ok = out.includes(`- ${id} `);
-    return NextResponse.json({ ok });
+    const port = AGENT_PORTS[id];
+    const res = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    return NextResponse.json({ ok: res.ok });
   } catch {
     return NextResponse.json({ ok: false });
   }

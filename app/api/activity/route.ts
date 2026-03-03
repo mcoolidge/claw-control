@@ -1,106 +1,108 @@
-import { NextRequest, NextResponse } from "next/server";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import { NextResponse } from "next/server";
+import { readFileSync, readdirSync, statSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 
-const OPENCLAW_DIR = path.join(os.homedir(), ".openclaw", "agents");
-const MAX_EVENTS = 50;
+const OPENCLAW_DIR = join(homedir(), ".openclaw");
 
 interface ActivityEvent {
   id: string;
+  ts: number;
   agent: string;
-  timestamp: string;
-  type: "message" | "tool" | "error" | "system";
-  role: string;
-  summary: string;
+  type: "cron" | "session" | "tool" | "message";
+  label: string;
+  status: "ok" | "error" | "running";
+  detail?: string;
+  durationMs?: number;
 }
 
-function parseSessionFile(filePath: string, agentId: string): ActivityEvent[] {
-  try {
-    const lines = fs.readFileSync(filePath, "utf8").trim().split("\n").filter(Boolean);
-    const events: ActivityEvent[] = [];
+function readCronEvents(limit: number): ActivityEvent[] {
+  const runsDir = join(OPENCLAW_DIR, "cron", "runs");
+  const events: ActivityEvent[] = [];
 
-    for (const line of lines.slice(-100)) {
+  try {
+    const files = readdirSync(runsDir)
+      .map((f) => ({ f, mtime: statSync(join(runsDir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, 20) // recent files only
+      .map(({ f }) => f);
+
+    for (const file of files) {
       try {
-        const entry = JSON.parse(line);
-        if (entry.type !== "message") continue;
-        const msg = entry.message || {};
-        const role = msg.role || "unknown";
-        const content = msg.content;
-
-        let summary = "";
-        let type: ActivityEvent["type"] = "message";
-
-        if (Array.isArray(content)) {
-          for (const c of content) {
-            if (c.type === "toolCall") {
-              summary = `called ${c.name}`;
-              type = "tool";
-              break;
-            } else if (c.type === "toolResult") {
-              summary = `tool result`;
-              type = "tool";
-              break;
-            } else if (c.type === "text" && c.text) {
-              summary = c.text.slice(0, 80);
-              type = role === "user" ? "message" : "message";
-              break;
+        const lines = readFileSync(join(runsDir, file), "utf8")
+          .trim()
+          .split("\n")
+          .filter(Boolean);
+        for (const line of lines.reverse()) {
+          try {
+            const ev = JSON.parse(line);
+            if (ev.action === "finished" || ev.action === "started") {
+              // Extract agent from sessionKey: agent:<id>:cron:...
+              const agentMatch = ev.sessionKey?.match(/^agent:([^:]+):/);
+              const agent = agentMatch ? agentMatch[1] : "main";
+              events.push({
+                id: `cron-${ev.ts}-${ev.jobId?.slice(0, 8)}`,
+                ts: ev.ts,
+                agent,
+                type: "cron",
+                label: ev.action === "started" ? "Cron job started" : "Cron job finished",
+                status: ev.status === "error" ? "error" : ev.action === "started" ? "running" : "ok",
+                detail: ev.error || ev.sessionKey?.split(":").slice(0, 4).join(":"),
+                durationMs: ev.durationMs,
+              });
             }
-          }
-        } else if (typeof content === "string") {
-          summary = content.slice(0, 80);
+          } catch {}
         }
-
-        if (!summary) continue;
-
-        events.push({
-          id: entry.id || `${Date.now()}-${Math.random()}`,
-          agent: agentId,
-          timestamp: entry.timestamp || new Date().toISOString(),
-          type,
-          role,
-          summary,
-        });
-      } catch { /* skip bad lines */ }
+      } catch {}
+      if (events.length >= limit) break;
     }
-    return events;
-  } catch {
-    return [];
-  }
+  } catch {}
+
+  return events;
 }
 
-export async function GET(req: NextRequest) {
-  const limit = parseInt(req.nextUrl.searchParams.get("limit") || "50");
+function readSessionEvents(limit: number): ActivityEvent[] {
+  const events: ActivityEvent[] = [];
+  const agentsDir = join(OPENCLAW_DIR, "agents");
 
   try {
-    const allEvents: ActivityEvent[] = [];
-
-    const agentDirs = fs.readdirSync(OPENCLAW_DIR).filter((d) => {
-      return fs.statSync(path.join(OPENCLAW_DIR, d)).isDirectory();
-    });
-
+    const agentDirs = readdirSync(agentsDir);
     for (const agentId of agentDirs) {
-      const sessionsDir = path.join(OPENCLAW_DIR, agentId, "sessions");
-      if (!fs.existsSync(sessionsDir)) continue;
-
-      // Get most recent session files (last 3 per agent)
-      const files = fs.readdirSync(sessionsDir)
-        .filter((f) => f.endsWith(".jsonl"))
-        .map((f) => ({ name: f, mtime: fs.statSync(path.join(sessionsDir, f)).mtimeMs }))
-        .sort((a, b) => b.mtime - a.mtime)
-        .slice(0, 3)
-        .map((f) => path.join(sessionsDir, f.name));
-
-      for (const file of files) {
-        allEvents.push(...parseSessionFile(file, agentId));
-      }
+      const sessPath = join(agentsDir, agentId, "sessions", "sessions.json");
+      try {
+        const raw = readFileSync(sessPath, "utf8");
+        const data = JSON.parse(raw);
+        const sessions: Record<string, unknown>[] = Array.isArray(data) ? data : Object.values(data);
+        for (const s of sessions.slice(-20)) {
+          const session = s as Record<string, unknown>;
+          if (!session.updatedAt) continue;
+          events.push({
+            id: `session-${session.sessionId}`,
+            ts: session.updatedAt as number,
+            agent: agentId,
+            type: "session",
+            label: (session.label as string) || "Session updated",
+            status: "ok",
+            detail: session.model as string | undefined,
+          });
+        }
+      } catch {}
     }
+  } catch {}
 
-    // Sort by timestamp desc, take limit
-    allEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return events.sort((a, b) => b.ts - a.ts).slice(0, limit);
+}
 
-    return NextResponse.json({ events: allEvents.slice(0, limit) });
-  } catch (err) {
-    return NextResponse.json({ events: [], error: String(err) });
-  }
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const limit = parseInt(url.searchParams.get("limit") || "50");
+
+  const cron = readCronEvents(30);
+  const sessions = readSessionEvents(30);
+
+  const all = [...cron, ...sessions]
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, limit);
+
+  return NextResponse.json({ events: all });
 }
