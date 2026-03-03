@@ -1,23 +1,29 @@
 "use client";
 
-import { useState, useEffect, type ComponentType } from "react";
+import { useState, useEffect } from "react";
 import { PANELS } from "@/lib/panels";
 import { AGENTS, checkAgentHealth } from "@/lib/agents";
 import ActivityFeed from "@/components/panels/activity-feed";
+import TaskBoard from "@/components/panels/task-board";
+import CalendarView from "@/components/panels/calendar-view";
+import ProjectList from "@/components/panels/project-list";
+import MemoryJournal from "@/components/panels/memory-journal";
+import DocLibrary from "@/components/panels/doc-library";
+import TeamOrgChart from "@/components/panels/team-org-chart";
+import OfficeView from "@/components/panels/office-view";
 
 // ── Panel component registry ────────────────────────────────────────
-// Maps panel id → default-exported component.
 // To add a new panel: 1) add entry to lib/panels.ts, 2) create component
-// in components/panels/{id}.tsx, 3) register it here.
-const PANEL_COMPONENTS: Record<string, ComponentType> = {
-  "task-board":     require("@/components/panels/task-board").default,
-  "calendar-view":  require("@/components/panels/calendar-view").default,
-  "project-list":   require("@/components/panels/project-list").default,
-  "memory-journal": require("@/components/panels/memory-journal").default,
-  "doc-library":    require("@/components/panels/doc-library").default,
-  "team-org-chart": require("@/components/panels/team-org-chart").default,
-  "office-view":    require("@/components/panels/office-view").default,
-  "activity-feed":  require("@/components/panels/activity-feed").default,
+// in components/panels/{id}.tsx, 3) import + register it here.
+const PANEL_COMPONENTS: Record<string, React.ComponentType> = {
+  "task-board":     TaskBoard,
+  "calendar-view":  CalendarView,
+  "project-list":   ProjectList,
+  "memory-journal": MemoryJournal,
+  "doc-library":    DocLibrary,
+  "team-org-chart": TeamOrgChart,
+  "office-view":    OfficeView,
+  "activity-feed":  ActivityFeed,
 };
 
 export default function MissionControl() {
@@ -58,7 +64,7 @@ export default function MissionControl() {
               key={panel.id}
               onClick={() => setActivePanel(panel.id)}
               title={panel.label}
-              className={`size-10 rounded-lg flex items-center justify-center transition-colors ${
+              className={`size-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
                 isActive
                   ? "bg-zinc-800 text-zinc-100"
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
@@ -81,7 +87,6 @@ export default function MissionControl() {
             )}
           </div>
           <div className="flex items-center gap-4">
-            {/* Agent dots */}
             {AGENTS.map((a) => (
               <div key={a.name} className="flex items-center gap-1.5" title={a.name}>
                 <div
@@ -94,10 +99,9 @@ export default function MissionControl() {
                 <span className="text-xs text-zinc-500">{a.name}</span>
               </div>
             ))}
-            {/* Feed toggle */}
             <button
               onClick={() => setFeedOpen((v) => !v)}
-              className={`text-xs px-2 py-1 rounded ${feedOpen ? "bg-zinc-800 text-zinc-300" : "text-zinc-500 hover:text-zinc-300"}`}
+              className={`text-xs px-2 py-1 rounded cursor-pointer ${feedOpen ? "bg-zinc-800 text-zinc-300" : "text-zinc-500 hover:text-zinc-300"}`}
               title="Toggle activity feed"
             >
               Feed
@@ -107,12 +111,10 @@ export default function MissionControl() {
 
         {/* Content area */}
         <div className="flex-1 flex min-h-0">
-          {/* Main panel */}
-          <main className="flex-1 overflow-hidden p-5 min-w-0">
+          <main className="flex-1 overflow-auto p-5 min-w-0">
             {ActiveComponent ? <ActiveComponent /> : null}
           </main>
 
-          {/* Persistent activity feed (right rail) */}
           {feedOpen && (
             <aside className="w-72 border-l border-zinc-800 bg-zinc-900/30 p-3 shrink-0 overflow-hidden flex flex-col">
               <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
