@@ -1,0 +1,16 @@
+[Unit]
+Description=Claw Memory Service (Mem0 + Qdrant)
+After=network.target
+
+[Service]
+Type=simple
+User=mat
+WorkingDirectory=/home/mat/Projects/claw-control/memory-service
+ExecStart=/home/linuxbrew/.linuxbrew/bin/python3 main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
