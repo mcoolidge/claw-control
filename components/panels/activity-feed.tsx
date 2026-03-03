@@ -21,7 +21,7 @@ const TYPE_BADGES: Record<string, string> = {
 async function fetchAgentEvents(port: number): Promise<ActivityEvent[]> {
   for (const path of ["/api/events", "/api/activity"]) {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+      const res = await fetch(`/api/health?port=${port}`, {
         signal: AbortSignal.timeout(2000),
       });
       if (res.ok) return await res.json();

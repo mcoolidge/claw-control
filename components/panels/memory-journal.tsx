@@ -4,6 +4,15 @@ import { useState, useEffect, useCallback } from "react";
 import { AGENTS } from "@/lib/agents";
 import { Search, Clock, Database, RefreshCw, Wifi, WifiOff } from "lucide-react";
 
+function uuid(): string {
+  try { return crypto.randomUUID(); } catch {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+}
+
 function agentColor(name: string) {
   return AGENTS.find((a) => a.name === name)?.color ?? "#71717a";
 }
@@ -51,7 +60,7 @@ const SOURCE_STYLE: Record<string, string> = {
   event:    "text-orange-400",
 };
 
-const API_BASE = "http://localhost:8765";
+const API_BASE = "/api/memory";
 
 function normalizeApiMemory(raw: Record<string, unknown>): Memory {
   const text = (raw.memory as string) || (raw.text as string) || (raw.content as string) || "";
@@ -74,7 +83,7 @@ function normalizeApiMemory(raw: Record<string, unknown>): Memory {
   }
 
   return {
-    id: (raw.id as string) || crypto.randomUUID(),
+    id: (raw.id as string) || uuid(),
     agent: (raw.agent as string) || (raw.user_id as string) || "System",
     type: (raw.type as Memory["type"]) || "fact",
     source: (raw.source as Memory["source"]) || "tool",

@@ -1,5 +1,14 @@
 import { AGENTS } from "./agents";
 
+function uuid(): string {
+  try { return crypto.randomUUID(); } catch {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+}
+
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 export type TaskStatus = "backlog" | "in-progress" | "in-review" | "done";
 
@@ -144,7 +153,7 @@ export function generateMockEvent(): ActivityEvent {
   const description = descriptions[Math.floor(Math.random() * descriptions.length)];
 
   return {
-    id: crypto.randomUUID(),
+    id: uuid(),
     agent: agent.name,
     type,
     description,

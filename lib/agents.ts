@@ -19,10 +19,11 @@ export type AgentStatus = {
 
 export async function checkAgentHealth(port: number): Promise<boolean> {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/`, {
+    const res = await fetch(`/api/health?port=${port}`, {
       signal: AbortSignal.timeout(2000),
     });
-    return res.ok;
+    const data = await res.json();
+    return data.ok === true;
   } catch {
     return false;
   }
