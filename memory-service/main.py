@@ -25,10 +25,7 @@ QDRANT_PORT = 6333
 COLLECTION  = "claw_memory"
 EMBED_DIM   = 768  # nomic-embed-text-v1.5
 
-LM_STUDIO_URL = "http://192.168.8.238:1234/v1"
-LM_STUDIO_KEY = "lm-studio-local"
-EMBED_MODEL   = "text-embedding-nomic-embed-text-v1.5"
-LLM_MODEL     = "qwen/qwen3.5-35b-a3b"
+OLLAMA_URL    = "http://localhost:11434"
 
 MEM0_CONFIG = {
     "vector_store": {
@@ -40,19 +37,17 @@ MEM0_CONFIG = {
         }
     },
     "embedder": {
-        "provider": "openai",
+        "provider": "ollama",
         "config": {
-            "model": EMBED_MODEL,
-            "api_key": LM_STUDIO_KEY,
-            "openai_base_url": LM_STUDIO_URL,
+            "model": "nomic-embed-text",
+            "ollama_base_url": OLLAMA_URL,
         }
     },
     "llm": {
-        "provider": "openai",
+        "provider": "ollama",
         "config": {
-            "model": LLM_MODEL,
-            "api_key": LM_STUDIO_KEY,
-            "openai_base_url": LM_STUDIO_URL,
+            "model": "qwen3.5",
+            "ollama_base_url": OLLAMA_URL,
         }
     }
 }
