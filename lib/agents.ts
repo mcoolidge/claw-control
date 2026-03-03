@@ -1,26 +1,26 @@
-// Agent registry — maps agent name to their OpenClaw gateway port
+// Agent registry — loaded dynamically from OpenClaw gateway via /api/agents
+// Fallback list used for SSR / before API loads
+
+export const AGENT_COLORS: Record<string, string> = {
+  main:    "#f97316",
+  athena:  "#a78bfa",
+  ada:     "#34d399",
+  suzieqa: "#60a5fa",
+};
+
 export const AGENTS = [
-  { name: "Greg",   port: 19000, model: "github-copilot/claude-sonnet-4.6", color: "#3b82f6" },
-  { name: "Apollo", port: 19001, model: "openai/gpt-4o",                    color: "#22c55e" },
-  { name: "Kai",    port: 19005, model: "openai/gpt-4o",                    color: "#a855f7" },
-  { name: "Athena", port: 24000, model: "openai/gpt-4o",                    color: "#f97316" },
-] as const;
+  { name: "Henry",   id: "main",    model: "github-copilot/claude-sonnet-4.6", color: "#f97316" },
+  { name: "Athena",  id: "athena",  model: "github-copilot/claude-sonnet-4.6", color: "#a78bfa" },
+  { name: "Ada",     id: "ada",     model: "github-copilot/claude-sonnet-4.6", color: "#34d399" },
+  { name: "SuzieQA", id: "suzieqa", model: "github-copilot/claude-sonnet-4.6", color: "#60a5fa" },
+];
 
 export type Agent = (typeof AGENTS)[number];
 
-export type AgentStatus = {
-  name: string;
-  port: number;
-  model: string;
-  color: string;
-  status: "up" | "down";
-  lastChecked: string;
-};
-
-export async function checkAgentHealth(port: number): Promise<boolean> {
+export async function checkAgentHealth(agentId: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/health?port=${port}`, {
-      signal: AbortSignal.timeout(2000),
+    const res = await fetch(`/api/agents/health?id=${agentId}`, {
+      signal: AbortSignal.timeout(3000),
     });
     const data = await res.json();
     return data.ok === true;

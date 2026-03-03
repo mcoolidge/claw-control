@@ -56,7 +56,7 @@ export default function OfficeView() {
       const results: Record<string, boolean> = {};
       await Promise.all(
         AGENTS.map(async (a) => {
-          results[a.name] = await checkAgentHealth(a.port);
+          results[a.name] = await checkAgentHealth(a.id);
         })
       );
       setOnline(results);

@@ -6,9 +6,12 @@ After=network.target claw-memory.service
 Type=simple
 User=mat
 WorkingDirectory=/home/mat/Projects/claw-control
+ExecStartPre=/bin/sh -c "fuser -k 3030/tcp || true"
 ExecStart=/home/linuxbrew/.linuxbrew/bin/npx next start -H 0.0.0.0 -p 3030
-Restart=on-failure
+Restart=always
 RestartSec=5
+KillMode=control-group
+TimeoutStopSec=10
 StandardOutput=journal
 StandardError=journal
 

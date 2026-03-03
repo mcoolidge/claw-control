@@ -1,129 +1,124 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AGENTS } from "@/lib/agents";
-import { generateMockEvent, type ActivityEvent } from "@/lib/mock-data";
+import { useEffect, useState, useCallback } from "react";
+import { RefreshCw } from "lucide-react";
 
-const MAX_EVENTS = 50;
-
-function agentColor(name: string) {
-  return AGENTS.find((a) => a.name === name)?.color ?? "#71717a";
+interface ActivityEvent {
+  id: string;
+  agent: string;
+  timestamp: string;
+  type: "message" | "tool" | "error" | "system";
+  role: string;
+  summary: string;
 }
 
-const TYPE_BADGES: Record<string, string> = {
-  task:   "bg-blue-500/15 text-blue-400",
-  tool:   "bg-emerald-500/15 text-emerald-400",
-  memory: "bg-purple-500/15 text-purple-400",
-  system: "bg-zinc-500/15 text-zinc-400",
-  error:  "bg-red-500/15 text-red-400",
+const AGENT_COLORS: Record<string, string> = {
+  main:    "#f97316",
+  athena:  "#a78bfa",
+  ada:     "#34d399",
+  suzieqa: "#60a5fa",
 };
 
-async function fetchAgentEvents(port: number): Promise<ActivityEvent[]> {
-  for (const path of ["/api/events", "/api/activity"]) {
-    try {
-      const res = await fetch(`/api/health?port=${port}`, {
-        signal: AbortSignal.timeout(2000),
-      });
-      if (res.ok) return await res.json();
-    } catch {
-      // try next path
-    }
-  }
-  return [];
+const TYPE_BADGES: Record<string, string> = {
+  tool:    "bg-emerald-500/15 text-emerald-400",
+  message: "bg-blue-500/15 text-blue-400",
+  error:   "bg-red-500/15 text-red-400",
+  system:  "bg-zinc-500/15 text-zinc-400",
+};
+
+function relativeTime(ts: string) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
 }
 
 export default function ActivityFeed() {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [tick, setTick] = useState(0);
 
-  useEffect(() => {
-    const seed = Array.from({ length: 6 }, () => generateMockEvent());
-    setEvents(seed);
-
-    const interval = setInterval(async () => {
-      const allFetched = await Promise.all(
-        AGENTS.map((a) => fetchAgentEvents(a.port))
-      );
-      const real = allFetched.flat();
-
-      if (real.length > 0) {
-        setEvents((prev) => [...prev, ...real].slice(-MAX_EVENTS));
-      } else {
-        setEvents((prev) => [...prev, generateMockEvent()].slice(-MAX_EVENTS));
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
+  const fetchEvents = useCallback(async () => {
+    try {
+      const res = await fetch("/api/activity?limit=50");
+      const data = await res.json();
+      setEvents(data.events || []);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [events]);
+    fetchEvents();
+    const id = setInterval(() => {
+      fetchEvents();
+      setTick((t) => t + 1);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [fetchEvents]);
 
-  const displayed = filterType
-    ? events.filter((ev) => ev.type === filterType)
-    : events;
+  // Tick forces relative time to update
+  void tick;
+
+  const filtered = filterType ? events.filter((e) => e.type === filterType) : events;
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-2 px-1 flex-wrap">
-        <span className="text-xs text-zinc-500">
-          Live feed
-        </span>
-        <span className="text-[10px] text-zinc-600">{events.length} events</span>
-        {/* Type filters */}
-        <div className="flex gap-1 ml-auto">
-          {filterType && (
-            <button
-              onClick={() => setFilterType(null)}
-              className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-700 text-zinc-300"
-            >
-              all
-            </button>
-          )}
-          {Object.keys(TYPE_BADGES).map((type) => (
-            <button
-              key={type}
-              onClick={() => setFilterType(filterType === type ? null : type)}
-              className={`text-[9px] px-1.5 py-0.5 rounded-full transition-colors ${
-                filterType === type ? TYPE_BADGES[type] : "text-zinc-600 hover:text-zinc-400"
-              }`}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-1 pr-1 min-h-0">
-        {displayed.map((ev, idx) => (
-          <div
-            key={ev.id}
-            className={`flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-800/50 transition-all ${
-              idx === displayed.length - 1 ? "animate-in fade-in duration-300" : ""
+    <div className="flex flex-col h-full gap-2">
+      {/* Filter bar */}
+      <div className="flex gap-1 flex-wrap">
+        {["tool", "message"].map((t) => (
+          <button
+            key={t}
+            onClick={() => setFilterType(filterType === t ? null : t)}
+            className={`text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
+              filterType === t ? TYPE_BADGES[t] : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"
             }`}
           >
-            <div
-              className="size-5 shrink-0 rounded-full flex items-center justify-center text-[9px] font-bold text-white mt-0.5"
-              style={{ backgroundColor: agentColor(ev.agent) }}
-            >
-              {ev?.agent?.[0] ?? "?"}
-            </div>
-            <div className="flex-1 min-w-0">
+            {t}
+          </button>
+        ))}
+        <button
+          onClick={fetchEvents}
+          className="ml-auto text-zinc-500 hover:text-zinc-300 cursor-pointer"
+          title="Refresh"
+        >
+          <RefreshCw className="size-3" />
+        </button>
+      </div>
+
+      {/* Events */}
+      <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
+        {loading && (
+          <p className="text-xs text-zinc-500 text-center pt-4">Loading…</p>
+        )}
+        {!loading && filtered.length === 0 && (
+          <p className="text-xs text-zinc-500 text-center pt-4">No activity yet</p>
+        )}
+        {filtered.map((ev) => (
+          <div
+            key={ev.id}
+            className="rounded-md bg-zinc-800/50 px-2.5 py-2 text-xs border border-zinc-700/30"
+          >
+            <div className="flex items-center justify-between gap-1 mb-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium" style={{ color: agentColor(ev.agent) }}>
-                  {ev.agent}
-                </span>
-                <span className={`text-[9px] px-1 rounded-full ${TYPE_BADGES[ev.type] ?? TYPE_BADGES.system}`}>
-                  {ev.type}
+                <span
+                  className="size-2 rounded-full shrink-0"
+                  style={{ backgroundColor: AGENT_COLORS[ev.agent] ?? "#71717a" }}
+                />
+                <span className="font-medium text-zinc-300">{ev.agent}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${TYPE_BADGES[ev.type] ?? TYPE_BADGES.system}`}>
+                  {ev.role === "toolResult" ? "result" : ev.type}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 truncate">{ev.description}</p>
+              <span className="text-zinc-600 text-[10px] shrink-0">{relativeTime(ev.timestamp)}</span>
             </div>
-            <span className="text-[9px] text-zinc-600 shrink-0 mt-0.5">
-              {new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
+            <p className="text-zinc-400 leading-snug truncate">{ev.summary}</p>
           </div>
         ))}
       </div>

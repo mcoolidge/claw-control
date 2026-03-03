@@ -52,7 +52,7 @@ export default function TeamOrgChart() {
       const results: Record<string, boolean> = {};
       await Promise.all(
         AGENTS.map(async (a) => {
-          results[a.name] = await checkAgentHealth(a.port);
+          results[a.name] = await checkAgentHealth(a.id);
         })
       );
       setStatuses(results);
@@ -132,7 +132,7 @@ export default function TeamOrgChart() {
 
               {/* Right column */}
               <div className="text-right shrink-0 space-y-1.5">
-                <div className="text-[10px] text-zinc-600">Port {agent.port}</div>
+                <div className="text-[10px] text-zinc-600">ID: {agent.id}</div>
                 <div className="text-[10px] text-zinc-600 max-w-[140px] truncate">{agent.model}</div>
                 <div className="mt-2">
                   <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Working on</div>
