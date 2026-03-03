@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AGENTS } from "@/lib/agents";
-import { Search, Clock, Database } from "lucide-react";
+import { Search, Clock, Database, RefreshCw, Wifi, WifiOff } from "lucide-react";
 
 function agentColor(name: string) {
   return AGENTS.find((a) => a.name === name)?.color ?? "#71717a";
 }
 
 type Memory = {
-  id: number;
+  id: number | string;
   agent: string;
   type: "context" | "fact" | "procedure" | "episode";
   source: "chat" | "tool" | "document" | "event";
@@ -20,7 +20,7 @@ type Memory = {
   project?: string;
 };
 
-const MEMORIES: Memory[] = [
+const FALLBACK_MEMORIES: Memory[] = [
   { id: 1,  agent: "Greg",   type: "context",   source: "chat",     text: "User prefers Tailwind v4 with no config file — use @theme inline directives.",                    ts: "14:32", day: "Today",      store: "short-term", project: "Claw Control Dashboard" },
   { id: 2,  agent: "Apollo", type: "fact",       source: "tool",     text: "Qdrant collection 'codebase' uses 1536-dim embeddings from text-embedding-3-small.",                ts: "14:18", day: "Today",      store: "long-term",  project: "Memory Service v2" },
   { id: 3,  agent: "Kai",    type: "procedure",  source: "document", text: "To restart an agent: stop systemd unit, clear /tmp/locks, then start again.",                      ts: "13:45", day: "Today",      store: "long-term" },
@@ -51,15 +51,104 @@ const SOURCE_STYLE: Record<string, string> = {
   event:    "text-orange-400",
 };
 
+const API_BASE = "http://localhost:8765";
+
+function normalizeApiMemory(raw: Record<string, unknown>): Memory {
+  const text = (raw.memory as string) || (raw.text as string) || (raw.content as string) || "";
+  const ts = raw.created_at || raw.timestamp || raw.ts || "";
+  const tsStr = typeof ts === "string" ? ts : "";
+
+  // Try to parse date for day grouping
+  let day = "Today";
+  if (tsStr) {
+    try {
+      const d = new Date(tsStr);
+      const now = new Date();
+      const diff = Math.floor((now.getTime() - d.getTime()) / 86400000);
+      if (diff === 0) day = "Today";
+      else if (diff === 1) day = "Yesterday";
+      else day = `${diff} days ago`;
+    } catch {
+      // keep default
+    }
+  }
+
+  return {
+    id: (raw.id as string) || crypto.randomUUID(),
+    agent: (raw.agent as string) || (raw.user_id as string) || "System",
+    type: (raw.type as Memory["type"]) || "fact",
+    source: (raw.source as Memory["source"]) || "tool",
+    text,
+    ts: tsStr ? new Date(tsStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+    day,
+    store: (raw.store as Memory["store"]) || "long-term",
+    project: raw.project as string | undefined,
+  };
+}
+
 export default function MemoryJournal() {
   const [query, setQuery] = useState("");
   const [filterAgent, setFilterAgent] = useState<string | null>(null);
   const [filterStore, setFilterStore] = useState<"all" | "short-term" | "long-term">("all");
+  const [memories, setMemories] = useState<Memory[]>(FALLBACK_MEMORIES);
+  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const filtered = MEMORIES.filter((m) => {
+  const fetchMemories = useCallback(async (searchQuery?: string) => {
+    setLoading(true);
+    try {
+      const url = searchQuery
+        ? `${API_BASE}/memory/search?q=${encodeURIComponent(searchQuery)}&user_id=mat`
+        : `${API_BASE}/memory/list?user_id=mat`;
+
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) throw new Error("API error");
+      const data = await res.json();
+      const results = Array.isArray(data) ? data : (data.results || data.memories || []);
+
+      if (results.length > 0) {
+        setMemories(results.map((r: Record<string, unknown>) => normalizeApiMemory(r)));
+        setApiOnline(true);
+      } else {
+        // API responded but no results — keep showing if we had a query
+        if (searchQuery) {
+          setMemories([]);
+        }
+        setApiOnline(true);
+      }
+    } catch {
+      setApiOnline(false);
+      // Fall back to local mock data filtered by query
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        setMemories(FALLBACK_MEMORIES.filter((m) => m.text.toLowerCase().includes(q)));
+      } else {
+        setMemories(FALLBACK_MEMORIES);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial load — try API
+  useEffect(() => {
+    fetchMemories();
+  }, [fetchMemories]);
+
+  // Debounced search
+  useEffect(() => {
+    if (!query) {
+      fetchMemories();
+      return;
+    }
+    const timer = setTimeout(() => fetchMemories(query), 400);
+    return () => clearTimeout(timer);
+  }, [query, fetchMemories]);
+
+  // Client-side filtering on top of API results
+  const filtered = memories.filter((m) => {
     if (filterAgent && m.agent !== filterAgent) return false;
     if (filterStore !== "all" && m.store !== filterStore) return false;
-    if (query && !m.text.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
 
@@ -121,18 +210,37 @@ export default function MemoryJournal() {
             <Database className="size-3" /> Long-term
           </button>
         </div>
+        {/* API status + refresh */}
+        <div className="flex items-center gap-2 border-l border-zinc-700 pl-3">
+          <div className="flex items-center gap-1 text-[10px]">
+            {apiOnline === null ? (
+              <span className="text-zinc-600">checking...</span>
+            ) : apiOnline ? (
+              <><Wifi className="size-3 text-emerald-400" /><span className="text-emerald-400">API</span></>
+            ) : (
+              <><WifiOff className="size-3 text-zinc-500" /><span className="text-zinc-500">mock</span></>
+            )}
+          </div>
+          <button
+            onClick={() => fetchMemories(query || undefined)}
+            className="p-1 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300"
+            title="Refresh"
+          >
+            <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
       </div>
 
       {/* Timeline */}
       <div className="flex-1 overflow-y-auto space-y-5 min-h-0">
-        {grouped.map(({ day, memories }) => (
+        {grouped.map(({ day, memories: dayMemories }) => (
           <div key={day}>
             <div className="sticky top-0 z-10 bg-zinc-950/90 backdrop-blur-sm py-1 mb-2">
               <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{day}</span>
-              <span className="text-[10px] text-zinc-600 ml-2">{memories.length} memories</span>
+              <span className="text-[10px] text-zinc-600 ml-2">{dayMemories.length} memories</span>
             </div>
             <div className="space-y-2 pl-3 border-l border-zinc-800">
-              {memories.map((m) => (
+              {dayMemories.map((m) => (
                 <div key={m.id} className="relative rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-3 space-y-1.5">
                   {/* Timeline dot */}
                   <div className="absolute -left-[19px] top-4 size-2.5 rounded-full bg-zinc-700 ring-2 ring-zinc-950" />
@@ -146,8 +254,8 @@ export default function MemoryJournal() {
                     <span className="text-xs font-medium" style={{ color: agentColor(m.agent) }}>
                       {m.agent}
                     </span>
-                    <span className={`text-[9px] px-1.5 rounded-full ${TYPE_STYLE[m.type]}`}>{m.type}</span>
-                    <span className={`text-[9px] ${SOURCE_STYLE[m.source]}`}>via {m.source}</span>
+                    <span className={`text-[9px] px-1.5 rounded-full ${TYPE_STYLE[m.type] ?? "bg-zinc-500/15 text-zinc-400"}`}>{m.type}</span>
+                    <span className={`text-[9px] ${SOURCE_STYLE[m.source] ?? "text-zinc-400"}`}>via {m.source}</span>
                     {m.store === "short-term" && (
                       <span className="text-[9px] px-1.5 rounded-full bg-yellow-500/10 text-yellow-400/70">short-term</span>
                     )}
@@ -165,7 +273,9 @@ export default function MemoryJournal() {
           </div>
         ))}
         {grouped.length === 0 && (
-          <div className="text-xs text-zinc-600 text-center py-8">No matching memories</div>
+          <div className="text-xs text-zinc-600 text-center py-8">
+            {loading ? "Loading memories..." : "No matching memories"}
+          </div>
         )}
       </div>
     </div>

@@ -34,6 +34,7 @@ async function fetchAgentEvents(port: number): Promise<ActivityEvent[]> {
 
 export default function ActivityFeed() {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [filterType, setFilterType] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,16 +62,47 @@ export default function ActivityFeed() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [events]);
 
+  const displayed = filterType
+    ? events.filter((ev) => ev.type === filterType)
+    : events;
+
   return (
     <div className="flex flex-col h-full">
-      <div className="text-xs text-zinc-500 mb-3 px-1">
-        Live feed · {events.length} events
+      <div className="flex items-center gap-2 mb-2 px-1 flex-wrap">
+        <span className="text-xs text-zinc-500">
+          Live feed
+        </span>
+        <span className="text-[10px] text-zinc-600">{events.length} events</span>
+        {/* Type filters */}
+        <div className="flex gap-1 ml-auto">
+          {filterType && (
+            <button
+              onClick={() => setFilterType(null)}
+              className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-700 text-zinc-300"
+            >
+              all
+            </button>
+          )}
+          {Object.keys(TYPE_BADGES).map((type) => (
+            <button
+              key={type}
+              onClick={() => setFilterType(filterType === type ? null : type)}
+              className={`text-[9px] px-1.5 py-0.5 rounded-full transition-colors ${
+                filterType === type ? TYPE_BADGES[type] : "text-zinc-600 hover:text-zinc-400"
+              }`}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-1 pr-1 min-h-0">
-        {events.map((ev) => (
+        {displayed.map((ev, idx) => (
           <div
             key={ev.id}
-            className="flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-800/50 transition-colors"
+            className={`flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-800/50 transition-all ${
+              idx === displayed.length - 1 ? "animate-in fade-in duration-300" : ""
+            }`}
           >
             <div
               className="size-5 shrink-0 rounded-full flex items-center justify-center text-[9px] font-bold text-white mt-0.5"

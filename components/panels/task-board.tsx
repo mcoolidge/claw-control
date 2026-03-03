@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { AGENTS } from "@/lib/agents";
 import { MOCK_TASKS, type Task, type TaskStatus } from "@/lib/mock-data";
 import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: "backlog",     label: "Backlog" },
@@ -22,9 +24,19 @@ function agentColor(name: string) {
   return AGENTS.find((a) => a.name === name)?.color ?? "#71717a";
 }
 
-function TaskCard({ task }: { task: Task }) {
+function TaskCard({
+  task,
+  onMove,
+}: {
+  task: Task;
+  onMove: (id: string, direction: "left" | "right") => void;
+}) {
+  const colIdx = COLUMNS.findIndex((c) => c.id === task.status);
+  const canLeft = colIdx > 0;
+  const canRight = colIdx < COLUMNS.length - 1;
+
   return (
-    <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-3 space-y-2">
+    <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-3 space-y-2 group">
       <div className="flex items-start justify-between gap-2">
         <span className="text-sm font-medium text-zinc-100 leading-tight">
           {task.title}
@@ -44,15 +56,51 @@ function TaskCard({ task }: { task: Task }) {
           {task.assignee[0]}
         </div>
         <span className="text-xs text-zinc-500">{task.assignee}</span>
+
+        {/* Move buttons — visible on hover */}
+        <div className="ml-auto flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {canLeft && (
+            <button
+              onClick={() => onMove(task.id, "left")}
+              className="p-1 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300"
+              title={`Move to ${COLUMNS[colIdx - 1].label}`}
+            >
+              <ChevronLeft className="size-3.5" />
+            </button>
+          )}
+          {canRight && (
+            <button
+              onClick={() => onMove(task.id, "right")}
+              className="p-1 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300"
+              title={`Move to ${COLUMNS[colIdx + 1].label}`}
+            >
+              <ChevronRight className="size-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 export default function TaskBoard() {
+  const [tasks, setTasks] = useState<Task[]>(() => [...MOCK_TASKS]);
+
+  function moveTask(id: string, direction: "left" | "right") {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        const colIdx = COLUMNS.findIndex((c) => c.id === t.status);
+        const nextIdx = direction === "right" ? colIdx + 1 : colIdx - 1;
+        if (nextIdx < 0 || nextIdx >= COLUMNS.length) return t;
+        return { ...t, status: COLUMNS[nextIdx].id };
+      })
+    );
+  }
+
   const grouped = COLUMNS.map((col) => ({
     ...col,
-    tasks: MOCK_TASKS.filter((t) => t.status === col.id),
+    tasks: tasks.filter((t) => t.status === col.id),
   }));
 
   return (
@@ -78,7 +126,7 @@ export default function TaskBoard() {
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto pr-1">
               {col.tasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
+                <TaskCard key={task.id} task={task} onMove={moveTask} />
               ))}
               {col.tasks.length === 0 && (
                 <div className="text-xs text-zinc-600 text-center py-8">No tasks</div>
