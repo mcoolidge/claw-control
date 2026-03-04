@@ -13,7 +13,8 @@ export type TaskPriority = "low" | "medium" | "high" | "critical";
 export type TaskStatus = "backlog" | "in-progress" | "in-review" | "testing" | "done";
 
 export interface Task {
-  id: string;
+  id: string;        // CAR-5112 (identifier)
+  linearId?: string; // UUID for API calls
   title: string;
   description: string;
   status: TaskStatus;

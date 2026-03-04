@@ -61,19 +61,33 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// Linear state name → UUID (fetched once from the team)
+const STATE_IDS: Record<string, string> = {
+  "backlog":    "1225937d-cf9d-4ab1-b8f0-5dad29a5a1aa",
+  "in-progress":"92ee46dc-a010-4384-aaab-2eec8313f050",
+  "in-review":  "a60a7602-824d-45cc-8f49-4f086e8aaa7e",
+  "testing":    "0202df62-583e-4144-90dc-a4212e9575fc",
+  "done":       "c18156d1-67a1-4a7b-8f4a-e5eed4909e92",
+};
+
 export async function PATCH(req: NextRequest) {
   if (!TOKEN) return NextResponse.json({ error: "No LINEAR_SHIM_TOKEN" }, { status: 500 });
 
-  const { id, state } = await req.json();
-  if (!id || !state) return NextResponse.json({ error: "Missing id or state" }, { status: 400 });
+  const { id, linearId, state } = await req.json();
+  if ((!id && !linearId) || !state) return NextResponse.json({ error: "Missing id or state" }, { status: 400 });
 
-  const res = await fetch(`${SHIM_BASE}/issues/${id}`, {
+  const stateId = STATE_IDS[state];
+  if (!stateId) return NextResponse.json({ error: `Unknown state: ${state}` }, { status: 400 });
+
+  // Prefer linearId (UUID) for the PATCH URL; fall back to identifier
+  const issueRef = linearId || id;
+  const res = await fetch(`${SHIM_BASE}/issues/${issueRef}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${TOKEN}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ state }),
+    body: JSON.stringify({ stateId }),
   });
 
   const data = await res.json();

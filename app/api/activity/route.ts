@@ -65,8 +65,14 @@ function readSessionEvents(limit: number): ActivityEvent[] {
   const events: ActivityEvent[] = [];
   const agentsDir = join(OPENCLAW_DIR, "agents");
 
+  // Map openclaw agent dir names → display names for known local agents
+  const AGENT_DISPLAY: Record<string, string> = {
+    main: "main",
+    suzieqa: "suzieqa",
+  };
+
   try {
-    const agentDirs = readdirSync(agentsDir);
+    const agentDirs = readdirSync(agentsDir).filter((d) => d in AGENT_DISPLAY);
     for (const agentId of agentDirs) {
       const sessPath = join(agentsDir, agentId, "sessions", "sessions.json");
       try {

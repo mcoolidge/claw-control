@@ -3,34 +3,15 @@
 import { useEffect, useState } from "react";
 import { AGENTS, checkAgentHealth } from "@/lib/agents";
 
-type AgentState = {
-  task: string;
-  recentActions: string[];
-  mood: string;
-};
-
-const AGENT_STATES: Record<string, AgentState> = {
-  Greg: {
-    task: "Building UI components",
-    recentActions: ["Created task-board.tsx", "Updated layout.tsx", "Fixed sidebar nav"],
-    mood: "focused",
-  },
-  Apollo: {
-    task: "Running memory pipeline",
-    recentActions: ["Consolidated 12 memories", "Updated Qdrant index", "Ran embedding batch"],
-    mood: "busy",
-  },
-  Kai: {
-    task: "Reviewing schemas",
-    recentActions: ["Validated 5 tool schemas", "Opened PR for output types", "Checked test coverage"],
-    mood: "reviewing",
-  },
-  Athena: {
-    task: "Drafting reports",
-    recentActions: ["Compiled standup notes", "Drafted newsletter", "Scheduled calendar events"],
-    mood: "creative",
-  },
-};
+interface ActivityEvent {
+  id: string;
+  ts: number;
+  agent: string;
+  type: string;
+  label: string;
+  status: string;
+  detail?: string;
+}
 
 const DESKS: Record<string, { x: number; y: number; room: string }> = {
   Greg:   { x: 18, y: 22, room: "Engineering Lab" },
@@ -39,30 +20,51 @@ const DESKS: Record<string, { x: number; y: number; room: string }> = {
   Athena: { x: 62, y: 62, room: "Ops Center" },
 };
 
-const MOOD_EMOJI: Record<string, string> = {
-  focused:   "🔨",
-  busy:      "⚡",
-  reviewing: "🔍",
-  creative:  "✨",
-  idle:      "💤",
-};
+function relativeTime(ts: number) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return new Date(ts).toLocaleDateString();
+}
 
 export default function OfficeView() {
   const [online, setOnline] = useState<Record<string, boolean>>({});
   const [hovered, setHovered] = useState<string | null>(null);
+  // Map agentId → recent events
+  const [agentActivity, setAgentActivity] = useState<Record<string, ActivityEvent[]>>({});
 
   useEffect(() => {
     async function poll() {
-      const results: Record<string, boolean> = {};
+      // Health check
+      const health: Record<string, boolean> = {};
       await Promise.all(
         AGENTS.map(async (a) => {
-          results[a.name] = await checkAgentHealth(a.id);
+          health[a.name] = await checkAgentHealth(a.id);
         })
       );
-      setOnline(results);
+      setOnline(health);
+
+      // Activity — pull recent events and group by agent id
+      try {
+        const res = await fetch("/api/activity?limit=100");
+        if (res.ok) {
+          const data = await res.json();
+          const grouped: Record<string, ActivityEvent[]> = {};
+          for (const ev of data.events || []) {
+            if (!grouped[ev.agent]) grouped[ev.agent] = [];
+            grouped[ev.agent].push(ev);
+          }
+          // Keep only 3 most recent per agent
+          for (const k in grouped) {
+            grouped[k] = grouped[k].slice(0, 3);
+          }
+          setAgentActivity(grouped);
+        }
+      } catch {}
     }
     poll();
-    const id = setInterval(poll, 5000);
+    const id = setInterval(poll, 10000);
     return () => clearInterval(id);
   }, []);
 
@@ -102,12 +104,7 @@ export default function OfficeView() {
           <div key={`room-${name}`}>
             <div
               className="absolute border border-dashed border-zinc-700/40 rounded-lg"
-              style={{
-                left: `${desk.x - 12}%`,
-                top: `${desk.y - 10}%`,
-                width: "30%",
-                height: "32%",
-              }}
+              style={{ left: `${desk.x - 12}%`, top: `${desk.y - 10}%`, width: "30%", height: "32%" }}
             />
             <div
               className="absolute text-[9px] text-zinc-600 uppercase tracking-[0.15em] font-medium"
@@ -118,7 +115,7 @@ export default function OfficeView() {
           </div>
         ))}
 
-        {/* Desks (little rectangles) */}
+        {/* Desks */}
         {Object.entries(DESKS).map(([name, desk]) => (
           <div
             key={`desk-${name}`}
@@ -131,8 +128,9 @@ export default function OfficeView() {
         {AGENTS.map((agent) => {
           const desk = DESKS[agent.name];
           const isOnline = online[agent.name];
-          const state = AGENT_STATES[agent.name];
           const isHovered = hovered === agent.name;
+          const events = agentActivity[agent.id] || agentActivity["main"] || [];
+          const latest = events[0];
 
           return (
             <div
@@ -142,7 +140,6 @@ export default function OfficeView() {
               onMouseEnter={() => setHovered(agent.name)}
               onMouseLeave={() => setHovered(null)}
             >
-              {/* Pulse for online */}
               {isOnline && (
                 <div
                   className="absolute size-14 rounded-full animate-ping opacity-15"
@@ -150,7 +147,6 @@ export default function OfficeView() {
                 />
               )}
 
-              {/* Avatar */}
               <div
                 className="relative size-11 rounded-full flex items-center justify-center text-base font-bold text-white shadow-lg z-10 transition-transform"
                 style={{
@@ -159,7 +155,7 @@ export default function OfficeView() {
                   transform: isHovered ? "scale(1.15)" : "scale(1)",
                 }}
               >
-                {agent?.name?.[0] ?? "?"}
+                {agent.name[0]}
                 <div
                   className={`absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-zinc-900 ${
                     isOnline ? "bg-emerald-400" : "bg-zinc-600"
@@ -167,33 +163,35 @@ export default function OfficeView() {
                 />
               </div>
 
-              {/* Name + mood */}
               <div className="text-center mt-1.5 z-10">
-                <div className="text-xs font-medium text-zinc-200">
-                  {agent.name} {MOOD_EMOJI[state.mood]}
+                <div className="text-xs font-medium text-zinc-200">{agent.name}</div>
+                <div className="text-[10px] text-zinc-500 max-w-[100px] truncate">
+                  {latest ? latest.label : isOnline ? "Active" : "Offline"}
                 </div>
-                <div className="text-[10px] text-zinc-500">{state.task}</div>
               </div>
 
               {/* Hover tooltip */}
               {isHovered && (
-                <div className="absolute top-full mt-3 z-20 w-52 rounded-lg border border-zinc-700 bg-zinc-800 p-3 shadow-xl space-y-2">
+                <div className="absolute top-full mt-3 z-20 w-56 rounded-lg border border-zinc-700 bg-zinc-800 p-3 shadow-xl space-y-2">
                   <div className="text-xs font-medium text-zinc-100 flex items-center gap-1.5">
                     <div className="size-3 rounded-full" style={{ backgroundColor: agent.color }} />
                     {agent.name}
                     <span className="text-[10px] text-zinc-500 ml-auto">{isOnline ? "Online" : "Offline"}</span>
                   </div>
-                  <div className="text-[10px] text-zinc-400">
-                    <span className="text-zinc-500">Working on:</span> {state.task}
-                  </div>
-                  <div className="space-y-0.5">
-                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Recent</span>
-                    {state.recentActions.map((a, i) => (
-                      <div key={i} className="text-[10px] text-zinc-400 flex items-start gap-1">
-                        <span className="text-zinc-600">•</span> {a}
-                      </div>
-                    ))}
-                  </div>
+                  {events.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Recent Activity</span>
+                      {events.map((ev) => (
+                        <div key={ev.id} className="text-[10px] text-zinc-400 flex items-start gap-1">
+                          <span className="text-zinc-600 shrink-0">•</span>
+                          <span className="flex-1 leading-tight">{ev.label}</span>
+                          <span className="text-zinc-600 shrink-0 ml-1">{relativeTime(ev.ts)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-zinc-600">No recent activity</div>
+                  )}
                 </div>
               )}
             </div>

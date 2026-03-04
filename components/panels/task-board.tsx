@@ -237,17 +237,11 @@ export default function TaskBoard() {
       const colIdx = COLUMNS.findIndex((c) => c.id === task.status);
       const nextIdx = direction === "right" ? colIdx + 1 : colIdx - 1;
       if (nextIdx >= 0 && nextIdx < COLUMNS.length) {
-        const linearStateMap: Record<string, string> = {
-          "backlog": "backlog",
-          "in-progress": "in_progress",
-          "in-review": "in_review",
-          "testing": "testing",
-          "done": "done",
-        };
+        // state key must match STATE_IDS in /api/tasks/route.ts (column id format)
         await fetch("/api/tasks", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, state: linearStateMap[COLUMNS[nextIdx].id] }),
+          body: JSON.stringify({ id, linearId: task.linearId, state: COLUMNS[nextIdx].id }),
         }).catch(() => {});
       }
     }
