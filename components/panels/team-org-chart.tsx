@@ -9,7 +9,6 @@ type AgentMeta = {
   role: string;
   description: string;
   capabilities: string[];
-  currentTask: string;
   icon: typeof Wrench;
 };
 
@@ -18,34 +17,31 @@ const AGENT_META: Record<string, AgentMeta> = {
     role: "Lead Engineer",
     description: "Full-stack builder and system architect. Handles UI, infrastructure, and deployment.",
     capabilities: ["Frontend development", "System architecture", "DevOps & deployment", "Health monitoring"],
-    currentTask: "Building Mission Control dashboard",
     icon: Wrench,
   },
   Apollo: {
     role: "Memory & Data Specialist",
     description: "Manages agent memory systems, embeddings, and data pipelines. Runs consolidation and indexing.",
     capabilities: ["Memory consolidation", "Vector embeddings", "Data pipeline ops", "Semantic search"],
-    currentTask: "Running memory consolidation pipeline",
     icon: Brain,
   },
   Kai: {
     role: "QA & Tool Engineer",
     description: "Builds and validates agent tools, schemas, and integrations. Focuses on quality and correctness.",
     capabilities: ["Schema validation", "Tool registry", "Code review", "Integration testing"],
-    currentTask: "Reviewing structured output schemas",
     icon: Search,
   },
   Athena: {
     role: "Ops & Communications",
     description: "Handles reporting, scheduling, documentation, and cross-team coordination.",
     capabilities: ["Standup summaries", "Newsletter drafts", "Calendar management", "Documentation"],
-    currentTask: "Drafting daily standup summary",
     icon: FileText,
   },
 };
 
 export default function TeamOrgChart() {
   const [statuses, setStatuses] = useState<Record<string, boolean>>({});
+  const [lastActivity, setLastActivity] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function poll() {
@@ -56,9 +52,22 @@ export default function TeamOrgChart() {
         })
       );
       setStatuses(results);
+
+      // Pull real last activity per agent
+      try {
+        const res = await fetch("/api/activity?limit=200");
+        if (res.ok) {
+          const data = await res.json();
+          const seen: Record<string, string> = {};
+          for (const ev of data.events || []) {
+            if (!seen[ev.agent]) seen[ev.agent] = ev.label;
+          }
+          setLastActivity(seen);
+        }
+      } catch {}
     }
     poll();
-    const id = setInterval(poll, 5000);
+    const id = setInterval(poll, 15000);
     return () => clearInterval(id);
   }, []);
 
@@ -136,8 +145,10 @@ export default function TeamOrgChart() {
                 <div className="text-[10px] text-zinc-600">ID: {agent.id}</div>
                 <div className="text-[10px] text-zinc-600 max-w-[140px] truncate">{agent.model}</div>
                 <div className="mt-2">
-                  <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Working on</div>
-                  <div className="text-xs text-zinc-300 mt-0.5 max-w-[160px]">{meta.currentTask}</div>
+                  <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Last seen</div>
+                  <div className="text-xs text-zinc-400 mt-0.5 max-w-[160px] leading-tight">
+                    {lastActivity["main"] ?? (statuses[agent.name] ? "Active" : "Idle")}
+                  </div>
                 </div>
               </div>
             </div>
